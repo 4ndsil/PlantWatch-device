@@ -1,10 +1,10 @@
-# Python 3 server example
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
 import json
+import db
+import os
+import datetime 
 
-hostName = "localhost"
-serverPort = 8080
+deviceId = os.environ.get("DEVICE_ID")
 
 def moistureReasoning(sensorValue, apiValue):
 
@@ -26,28 +26,28 @@ def moistureReasoning(sensorValue, apiValue):
     if sensorValue < 560:
         plantMoistureReport["Soil status"] = "Very dry"
 
-    if 559 < sensorValue & sensorValue < 920:
+    if (559 < sensorValue) & (sensorValue < 920):
         plantMoistureReport["Soil status"] = "Dry"
 
-    if 919 < sensorValue & sensorValue < 1280:
+    if (919 < sensorValue) & (sensorValue < 1280):
         plantMoistureReport["Soil status"] = "Half dry"
 
-    if 1279 < sensorValue & sensorValue < 1640:
+    if (1279 < sensorValue) & (sensorValue < 1640):
         plantMoistureReport["Soil status"] = "Moist"
 
-    if 1639 < sensorValue & sensorValue < 2000:
+    if (1639 < sensorValue) & (sensorValue < 2000):
         plantMoistureReport["Soil status"] = "Wet"
 
     if 1999 < sensorValue:
         plantMoistureReport["Soil status"] = "Just watered"
 
-    if apiValue == recommendedValues[0] | apiValue == recommendedValues[3] | apiValue == recommendedValues[4]:
+    if (apiValue == recommendedValues[0]) | (apiValue == recommendedValues[3]) | (apiValue == recommendedValues[4]):
         if sensorValue < 1279:
             plantMoistureReport["Watering required"] = "Yes <i class='bi bi-exclamation-triangle'></i>"
         else:
             plantMoistureReport["Watering required"] = "No"
 
-    if apiValue == recommendedValues[1] | apiValue == recommendedValues[2] | apiValue == recommendedValues[6]:
+    if (apiValue == recommendedValues[1]) | (apiValue == recommendedValues[2]) | (apiValue == recommendedValues[6]):
         if sensorValue < 919:
             plantMoistureReport["Watering required"] = "Yes <i class='bi bi-exclamation-triangle'></i>"
         else:
@@ -62,6 +62,12 @@ def moistureReasoning(sensorValue, apiValue):
 
 
 def luxReasoning(sensorValue, apiValue):
+    
+    luxValues = db.get_lux(deviceId)
+    
+    times = lux_today(luxValues, apiValue)
+
+    print(times)
 
     recommendedLuxValues = [
         "Diffuse light ( Less than 5,300 lux / 500 fc)",
@@ -77,7 +83,7 @@ def luxReasoning(sensorValue, apiValue):
     if sensorValue < 5300:
         plantLightReport["Position status"] = "Diffuse light"
 
-    if 5299 < sensorValue & sensorValue < 21500:
+    if (5299 < sensorValue) & (sensorValue < 21500):
         plantLightReport["Position status"] = "Strong light"
 
     if 21499 < sensorValue:
@@ -90,7 +96,7 @@ def luxReasoning(sensorValue, apiValue):
             plantLightReport["Light exposure"] = "Less light needed <i class='bi bi-exclamation-triangle'></i>"
 
     if apiValue == recommendedLuxValues[1]:
-        if 5299 < sensorValue & sensorValue < 21500:
+        if (5299 < sensorValue) & (sensorValue < 21500):
             plantLightReport["Light exposure"] = "Satisfied"
         elif sensorValue < 5230:
             plantLightReport["Light exposure"] = "More light needed <i class='bi bi-exclamation-triangle'></i>"
@@ -104,26 +110,59 @@ def luxReasoning(sensorValue, apiValue):
             plantLightReport["Light exposure"] = "More light needed <i class='bi bi-exclamation-triangle'></i>"
     return plantLightReport
 
-# TODO
-# def getInsights():
+def lux_today(luxValues, apiValue):
+  lux_dates = list(map(lambda lux: {"date": datetime.datetime.strptime(lux["date"], "%Y-%m-%d %H:%M:%S"),"lux": lux["lux"] }, luxValues))
+
+  times = []
+
+  total_time = 0
+
+  for lux_date in lux_dates:
+    if lux_date["date"].date() == datetime.date.today():
+      times.append({"time": lux_date["date"],"lux": lux_date["lux"]})
+
+  i = 1
+
+  while i < len(times):
+    print(times[i]["time"])
+    if (getRecommendation(float(times[i]["lux"]), apiValue) == 1) & (getRecommendation(float(times[i -1]["lux"]), apiValue) == 1):
+      print(times[i-1]["time"])
+      delta = (times[i]["time"] - times[i-1]["time"]).total_seconds()      
+      total_time += delta
+    i += 1
+  print("total time:", total_time)
+
+def getRecommendation(sensorValue, apiValue):
+  recommendedLuxValues = [
+        "Diffuse light ( Less than 5,300 lux / 500 fc)",
+        "Strong light ( 21,500 to 3,200 lux/2000 to 300 fc)",
+        "Full sun (+21,500 lux /+2000 fc )",
+    ];
+
+    # 0 => more light needed
+    # 1 => satisfied
+    # 2 => less light needed
+
+  if apiValue == recommendedLuxValues[0]:
+    if sensorValue < 5300:
+      return 1
+    else:
+      return 2
+  if apiValue == recommendedLuxValues[1]:
+    if (5299 < sensorValue) & (sensorValue < 21500):
+      return 1
+    elif sensorValue < 5230:
+      return 0
+    elif 21499 < sensorValue:
+      return 2
+  if apiValue == recommendedLuxValues[2]:
+    if 21499 < sensorValue:
+      return 1
+    else:
+      return 0
+  raise ValueError("Error: Invalid api value.")
+  
+    
 
 
-class MyServer(BaseHTTPRequestHandler):
-    def do_GET(self):
-      if self.path == "/insights":
-          self.send_response(200)
-          self.send_header("Content-type", "application/json")
-          self.end_headers()
-          self.wfile.write(bytes(json.dumps(getInsights()), encoding='utf8'))
-
-if __name__ == "__main__":        
-    webServer = HTTPServer((hostName, serverPort), MyServer)
-    print("Server started http://%s:%s" % (hostName, serverPort))
-
-    try:
-        webServer.serve_forever()
-    except KeyboardInterrupt:
-        pass
-
-    webServer.server_close()
-    print("Server stopped.")
+luxReasoning(5366, "Strong light ( 21,500 to 3,200 lux/2000 to 300 fc)")
