@@ -3,8 +3,23 @@ import json
 import db
 import os
 import datetime 
+from enum import Enum
+
+class lightNeeded(Enum):
+
+    NEED_MORE = 0
+
+    SATISFIED = 1
+
+    NEED_LESS = 2
 
 deviceId = os.environ.get("DEVICE_ID")
+
+recommendedLuxValues = [
+    "Diffuse light ( Less than 5,300 lux / 500 fc)",
+    "Strong light ( 21,500 to 3,200 lux/2000 to 300 fc)",
+    "Full sun (+21,500 lux /+2000 fc )",
+];
 
 def moistureReasoning(sensorValue, apiValue):
 
@@ -65,19 +80,21 @@ def luxReasoning(sensorValue, apiValue):
     
     luxValues = db.get_lux(deviceId)
     
-    times = lux_today(luxValues, apiValue)
+    secondsToday = lux_today(luxValues, apiValue, datetime.date.today())
+    secondsWeek = lux_today(luxValues, apiValue, datetime.date.today() - datetime.timedelta(days=7))
+    seconds30 = lux_today(luxValues, apiValue, datetime.date.today() - datetime.timedelta(days=30))
 
-    print(times)
+    lightToday = checkLightHours(secondsToday, apiValue)
+    lightWeek = checkLightHours(secondsWeek / 7, apiValue)
+    light30 = checkLightHours(seconds30 / 30, apiValue)
 
-    recommendedLuxValues = [
-        "Diffuse light ( Less than 5,300 lux / 500 fc)",
-        "Strong light ( 21,500 to 3,200 lux/2000 to 300 fc)",
-        "Full sun (+21,500 lux /+2000 fc )",
-    ];
 
     plantLightReport = {
         "Position status": "",
         "Light exposure": "",
+        "Light today": lightToday,
+        "Light week": lightWeek,
+        "Light 30": light30
     }
 
     if sensorValue < 5300:
@@ -110,7 +127,7 @@ def luxReasoning(sensorValue, apiValue):
             plantLightReport["Light exposure"] = "More light needed <i class='bi bi-exclamation-triangle'></i>"
     return plantLightReport
 
-def lux_today(luxValues, apiValue):
+def lux_today(luxValues, apiValue, date):
   lux_dates = list(map(lambda lux: {"date": datetime.datetime.strptime(lux["date"], "%Y-%m-%d %H:%M:%S"),"lux": lux["lux"] }, luxValues))
 
   times = []
@@ -118,27 +135,42 @@ def lux_today(luxValues, apiValue):
   total_time = 0
 
   for lux_date in lux_dates:
-    if lux_date["date"].date() == datetime.date.today():
+    if lux_date["date"].date() >= date:
       times.append({"time": lux_date["date"],"lux": lux_date["lux"]})
 
   i = 1
-
+  
   while i < len(times):
-    print(times[i]["time"])
     if (getRecommendation(float(times[i]["lux"]), apiValue) == 1) & (getRecommendation(float(times[i -1]["lux"]), apiValue) == 1):
-      print(times[i-1]["time"])
       delta = (times[i]["time"] - times[i-1]["time"]).total_seconds()      
       total_time += delta
     i += 1
   print("total time:", total_time)
+  return total_time
+
+def checkLightHours (total_seconds, apiValue):
+  full_shade = 10800
+  full_sun = 21600
+  if apiValue == recommendedLuxValues[0]:
+    if total_seconds < full_shade:
+        return {"status": lightNeeded.SATISFIED.name, "Light per day": total_seconds, "delta": 0}
+    else:
+        return {"status": lightNeeded.NEED_LESS.name, "Light per day": total_seconds, "delta": total_seconds-full_shade}
+  elif apiValue == recommendedLuxValues[1]:
+    if total_seconds < full_shade:
+        return {"status": lightNeeded.NEED_MORE.name, "Light per day": total_seconds, "delta": full_shade-total_seconds}
+    elif total_seconds > full_sun:
+        return {"status": lightNeeded.NEED_LESS.name, "Light per day": total_seconds, "delta": total_seconds-full_sun}
+    else:
+        return {"status": lightNeeded.SATISFIED.name, "Light per day": total_seconds, "delta": 0}
+  elif apiValue == recommendedLuxValues[2]:
+    if total_seconds > full_sun:
+        return {"status": lightNeeded.SATISFIED.name, "Light per day": total_seconds, "delta": 0}
+    else:
+        return {"status": lightNeeded.NEED_MORE.name, "Light per day": total_seconds, "delta": full_sun-total_seconds}
+
 
 def getRecommendation(sensorValue, apiValue):
-  recommendedLuxValues = [
-        "Diffuse light ( Less than 5,300 lux / 500 fc)",
-        "Strong light ( 21,500 to 3,200 lux/2000 to 300 fc)",
-        "Full sun (+21,500 lux /+2000 fc )",
-    ];
-
     # 0 => more light needed
     # 1 => satisfied
     # 2 => less light needed
@@ -165,4 +197,5 @@ def getRecommendation(sensorValue, apiValue):
     
 
 
-luxReasoning(5366, "Strong light ( 21,500 to 3,200 lux/2000 to 300 fc)")
+print(luxReasoning(5366, recommendedLuxValues[1]))
+
