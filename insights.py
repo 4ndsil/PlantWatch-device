@@ -7,11 +7,11 @@ from enum import Enum
 
 class lightNeeded(Enum):
 
-    NEED_MORE = 0
+    NEED_MORE = "More light needed"
 
-    SATISFIED = 1
+    SATISFIED = "Light requirement satisfied"
 
-    NEED_LESS = 2
+    NEED_LESS = "Less light needed"
 
 deviceId = os.environ.get("DEVICE_ID")
 
@@ -36,43 +36,47 @@ def moistureReasoning(sensorValue, apiValue):
     plantMoistureReport = {
         "Soil status": "",
         "Watering required": "",
+	"Last watered": ""
     }
 
-    if sensorValue < 560:
+    if sensorValue < 400:
         plantMoistureReport["Soil status"] = "Very dry"
 
-    if (559 < sensorValue) & (sensorValue < 920):
+    if (399 < sensorValue) & (sensorValue < 500):
         plantMoistureReport["Soil status"] = "Dry"
 
-    if (919 < sensorValue) & (sensorValue < 1280):
+    if (499 < sensorValue) & (sensorValue < 600):
         plantMoistureReport["Soil status"] = "Half dry"
 
-    if (1279 < sensorValue) & (sensorValue < 1640):
+    if (599 < sensorValue) & (sensorValue < 700):
         plantMoistureReport["Soil status"] = "Moist"
 
-    if (1639 < sensorValue) & (sensorValue < 2000):
+    if (699 < sensorValue) & (sensorValue < 800):
         plantMoistureReport["Soil status"] = "Wet"
 
-    if 1999 < sensorValue:
+    if 799 < sensorValue:
         plantMoistureReport["Soil status"] = "Just watered"
 
     if (apiValue == recommendedValues[0]) | (apiValue == recommendedValues[3]) | (apiValue == recommendedValues[4]):
-        if sensorValue < 1279:
+        if sensorValue < 600:
             plantMoistureReport["Watering required"] = "Yes <i class='bi bi-exclamation-triangle'></i>"
         else:
             plantMoistureReport["Watering required"] = "No"
 
     if (apiValue == recommendedValues[1]) | (apiValue == recommendedValues[2]) | (apiValue == recommendedValues[6]):
-        if sensorValue < 919:
+        if sensorValue < 500:
             plantMoistureReport["Watering required"] = "Yes <i class='bi bi-exclamation-triangle'></i>"
         else:
             plantMoistureReport["Watering required"] = "No"
 
     if apiValue == recommendedValues[5]:
-        if sensorValue < 559:
+        if sensorValue < 400:
             plantMoistureReport["Watering required"] = "Yes <i class='bi bi-exclamation-triangle'></i>"
         else:
             plantMoistureReport["Watering required"] = "No"
+
+    plantMoistureReport["Last watered"] = datetime.datetime.strftime(db.get_last_watered(deviceId), "%Y-%m-%d %H:%M:%S")
+
     return plantMoistureReport
 
 
@@ -88,13 +92,12 @@ def luxReasoning(sensorValue, apiValue):
     lightWeek = checkLightHours(secondsWeek / 7, apiValue)
     light30 = checkLightHours(seconds30 / 30, apiValue)
 
-
     plantLightReport = {
         "Position status": "",
         "Light exposure": "",
-        "Light today": lightToday,
-        "Light week": lightWeek,
-        "Light 30": light30
+        "Daily report": lightToday,
+        "Weekly report": lightWeek,
+        "Monthly report": light30
     }
 
     if sensorValue < 5300:
@@ -128,7 +131,7 @@ def luxReasoning(sensorValue, apiValue):
     return plantLightReport
 
 def lux_today(luxValues, apiValue, date):
-  lux_dates = list(map(lambda lux: {"date": datetime.datetime.strptime(lux["date"], "%Y-%m-%d %H:%M:%S"),"lux": lux["lux"] }, luxValues))
+  lux_dates = list(map(lambda lux: {"date": lux["date"], "lux": lux["lux"] }, luxValues))
 
   times = []
 
@@ -149,25 +152,26 @@ def lux_today(luxValues, apiValue, date):
   return total_time
 
 def checkLightHours (total_seconds, apiValue):
-  full_shade = 10800
-  full_sun = 21600
+  total_hours = total_seconds/3600
+  full_shade = 10800/3600
+  full_sun = 21600/3600
   if apiValue == recommendedLuxValues[0]:
-    if total_seconds < full_shade:
-        return {"status": lightNeeded.SATISFIED.name, "Light per day": total_seconds, "delta": 0}
+    if total_hours < full_shade:
+        return {"Status": lightNeeded.SATISFIED.value, "Light per day": str(total_hours) + "h"}
     else:
-        return {"status": lightNeeded.NEED_LESS.name, "Light per day": total_seconds, "delta": total_seconds-full_shade}
+        return {"Status": lightNeeded.NEED_LESS.value, "Light per day": str(total_hours) + "h", "Time from target": str(total_hours-full_shade) + "h"}
   elif apiValue == recommendedLuxValues[1]:
-    if total_seconds < full_shade:
-        return {"status": lightNeeded.NEED_MORE.name, "Light per day": total_seconds, "delta": full_shade-total_seconds}
-    elif total_seconds > full_sun:
-        return {"status": lightNeeded.NEED_LESS.name, "Light per day": total_seconds, "delta": total_seconds-full_sun}
+    if total_hours < full_shade:
+        return {"Status": lightNeeded.NEED_MORE.value, "Light per day": str(total_hours) + "h", "Time from target": str(full_shade-total_hours) + "h"}
+    elif total_hours > full_sun:
+        return {"Status": lightNeeded.NEED_LESS.value, "Light per day": str(total_hours) + "h", "Time from target": str(total_hours-full_sun) + "h"}
     else:
-        return {"status": lightNeeded.SATISFIED.name, "Light per day": total_seconds, "delta": 0}
+        return {"Status": lightNeeded.SATISFIED.value, "Light per day": str(total_hours) + "h"}
   elif apiValue == recommendedLuxValues[2]:
-    if total_seconds > full_sun:
-        return {"status": lightNeeded.SATISFIED.name, "Light per day": total_seconds, "delta": 0}
+    if total_hours > full_sun:
+        return {"Status": lightNeeded.SATISFIED.value, "Light per day": str(total_hours) + "h"}
     else:
-        return {"status": lightNeeded.NEED_MORE.name, "Light per day": total_seconds, "delta": full_sun-total_seconds}
+        return {"Status": lightNeeded.NEED_MORE.value, "Light per day": str(total_hours) + "h", "Time from target": str(full_sun-total_hours) + "h"}
 
 
 def getRecommendation(sensorValue, apiValue):
@@ -193,9 +197,4 @@ def getRecommendation(sensorValue, apiValue):
     else:
       return 0
   raise ValueError("Error: Invalid api value.")
-  
-    
-
-
-print(luxReasoning(5366, recommendedLuxValues[1]))
 
