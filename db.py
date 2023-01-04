@@ -2,7 +2,7 @@ from pymongo import MongoClient
 import os
 import time
 
-connStr = "mongodb+srv://andsil:KYeQihkjxeL8H2j@plantwatch.tz71h9c.mongodb.net/?retryWrites=true&w=majority" 
+connStr = os.environ.get("CONN_STR")
 
 while True:
   try:
@@ -37,6 +37,5 @@ def get_last_watered(deviceId):
 def get_device(deviceId):
     return device.find_one({"deviceId": deviceId})
 
-print(get_last_watered("raspberry1"))
 
 
