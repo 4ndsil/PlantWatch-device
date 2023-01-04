@@ -74,7 +74,15 @@ Open the mosquitto configuration using nano
 
 The broker needs to listen on two ports, one for MQTT and one for WebSockets (the client communicates using MQTT over WebSockets). Edit the configuration file to the following:
 
-`TODO`
+```
+listener 1883
+protocol mqtt
+
+listener 9001
+protocol websockets
+
+allow_anonymous true
+```
 
 ### Environment variables
 In order to run the application there is a need for two environment variable. Open the environment file using nano
