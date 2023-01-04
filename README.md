@@ -101,7 +101,8 @@ If you want the `publisher.py` script to run automatically on startup you can ad
 
 Add the following configuration to the unit file
 
-`[Unit]
+```
+[Unit]
 Description=Publisher
 After=network-online.target
 Wants=network-online.target
@@ -115,7 +116,7 @@ ExecStart=/usr/bin/python3 /home/pi/PlantWatch-device/publisher.py
 
 [Install]
 WantedBy=multi-user.target
-`
+```
 
 Reload the deamons and enable the publisher service
 
