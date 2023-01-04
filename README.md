@@ -101,7 +101,21 @@ If you want the `publisher.py` script to run automatically on startup you can ad
 
 Add the following configuration to the unit file
 
-`TODO`
+`[Unit]
+Description=Publisher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/home/pi/
+User=pi
+Environment=DEVICE_ID="raspberry1"
+Type=simple
+ExecStart=/usr/bin/python3 /home/pi/PlantWatch-device/publisher.py
+
+[Install]
+WantedBy=multi-user.target
+`
 
 Reload the deamons and enable the publisher service
 
